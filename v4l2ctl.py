@@ -13,6 +13,8 @@ PROP_SHARPNESS = "sharpness"
 PROP_BACKLIGHT_COMPENSATION = "backlight_compensation"
 PROP_EXPOSURE_AUTO = "exposure_auto"
 PROP_EXPOSURE_ABS = "exposure_absolute"
+PROP_FOCUS_AUTO = "focus_auto"
+PROP_FOCUS_ABSOLUTE = "focus_absolute"
 
 def __run__(command):
     p = subprocess.Popen(command, stdout=subprocess.PIPE)
@@ -34,6 +36,7 @@ def set(cami, prop, val):
     if val > props[prop]["max"] or val < props[prop]["min"]:
         raise ValueError("Value not in range for property! (" + str(props[prop]["min"]) + str(props[prop]["max"]) + ")")
     command = [__v4l2ctl, "--device", "/dev/video" + str(cami), "--set-ctrl", prop + "=" + str(val)]
+    #print(command)
     __run__(command)
 
 def restore_defaults(cami):
