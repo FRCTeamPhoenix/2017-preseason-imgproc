@@ -16,7 +16,7 @@ img = cv2.imread("board.png")
 gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
 # Find the chess board corners
-ret, corners = cv2.findChessboardCorners(gray, (8,8),None)
+ret, corners = cv2.findChessboardCorners(gray, (7,6),None)
 
 # If found, add object points, image points (after refining them)
 if ret == True:
@@ -25,9 +25,31 @@ if ret == True:
     corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
     imgpoints.append(corners)
 
+    print(corners2)
+    print()
+
     # Draw and display the corners
-    cv2.drawChessboardCorners(img, (8,8), corners2,ret)
+    cv2.drawChessboardCorners(img, (7,6), corners2,ret)
     cv2.imshow('img',img)
-    cv2.waitKey(500)
+    cv2.waitKey(10000)
+
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
+    h, w = img.shape[:2]
+
+    print(mtx)
+    print()
+    print(dist)
+
+
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+
+# undistort
+mapx,mapy = cv2.initUndistortRectifyMap(mtx,dist,None,newcameramtx,(w,h),5)
+dst = cv2.remap(img,mapx,mapy,cv2.INTER_LINEAR)
+
+# crop the image
+x,y,w,h = roi
+dst = dst[y:y+h, x:x+w]
+cv2.imwrite('calibresult.png',dst)
 
 cv2.destroyAllWindows()
