@@ -5,83 +5,93 @@ import platform
 import math
 import sys
 
-index = 1
-cap = cv2.VideoCapture(index)
+# used for drawing a 3d axis (calculated from pose estimation)
+def draw(img, corners, imgpts):
+    corner = tuple(corners[0].ravel())
+    img = cv2.line(img, corner, tuple(imgpts[0].ravel()), (255,0,0), 5)
+    img = cv2.line(img, corner, tuple(imgpts[1].ravel()), (0,255,0), 5)
+    img = cv2.line(img, corner, tuple(imgpts[2].ravel()), (0,0,255), 5)
+    return img
 
-# only run linux specific code on linux
-if platform.system() == "Linux":
+def config_linux(index):
     import v4l2ctl
     v4l2ctl.restore_defaults(index)
-    #v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
-    #v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
-    v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
-    v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
+    # v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
+    # v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
+    # v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
+    # v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
 
-# set the resolution
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+# camera init
+index = 0
+cap = cv2.VideoCapture(index)
 
+
+
+# experimentally determined camera (intrinsic) and distortion matrices, converted to numpy arrays
+mtx = [[ 771.82954339,    0,          640.18100339],
+       [   0,          777.63905203,  393.76546961],
+       [   0,            0,            1        ]]
+mtx = np.asarray(mtx)
+dist = [[ 0.03236637, -0.03763916, -0.00569912, -0.00091719, -0.008543  ]]
+dist = np.asarray(dist)
+
+# find out if the camera is actually working
 if cap.isOpened():
     rval, frame = cap.read()
+
+    # run some configuration if everything is good
+    if rval:
+        # set the resolution
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        # run linux specific config using v4l2 driver if the platform is linux
+        if platform.system() == "Linux":
+            config_linux(index)
 else:
     rval = False
 
+# vars for calculating fps
 frametimes = list()
 last = time.time()
 
-#frame = cv2.imread("last.png")
-
+# loop for as long as we're still getting images
 while rval:
     # read the frame
     rval, frame = cap.read()
 
-    # process image
+    # convert to hsv colorspace
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # split up the channels
     h, s, v = cv2.split(hsv)
+    # threshold the value channel
     _, v = cv2.threshold(v, 100, 255, cv2.THRESH_BINARY)
+
+    # erode, then dilate to remove noise
     kernel = np.ones((15, 15), np.uint8)
     v = cv2.morphologyEx(v, cv2.MORPH_OPEN, kernel)
+
+    # get a list of continuous lines in the image
     _, contours, _ = cv2.findContours(v, 1, 2)
 
-    # if len(contours) > 0:
-    #     for c in contours:
-    #         if len(c) >= 4:
-    #             p_last = c[0][0]
-    #             for p in c[1:]:
-    #                 # only one element in the 2d array
-    #                 p = p[0]
-    #
-    #                 angle = math.atan2(p[1] - p_last[1], p[0] - p_last[0])
-    #                 print(angle)
-    #                 p_last = p
+    # there's probably only a target if there are lines in the image
+    if (len(contours) > 0):
 
-    #epsilon = 0.01 * cv2.arcLength(contours[0], True)
-    #approx = cv2.approxPolyDP(contours[0],epsilon,True)
+        # generate object points array using fancy linear alg for the shape we're targeting
+        objp = np.zeros((4, 3), np.float32)
+        objp[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
 
+        # axis for drawing the debug representation
+        axis = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, -1]]).reshape(-1, 3)
 
+        # fit a polygon to the contour
+        epsilon = 0.01 * cv2.arcLength(contours[0], True)
+        polyp = cv2.approxPolyDP(contours[0],epsilon,True)
+        imgp = polyp.astype(np.float32)
 
-    #print(approx)
-    #sys.exit(0)
-
-
-    # # get most rectangular contour
-    # closest = 0
-    # closestc = None
-    # for c in contours:
-    #     x, y, w, h = cv2.boundingRect(c)
-    #     a1 = cv2.contourArea(c)
-    #     a2 = w * h
-    #     ratio = min(a1, a2) / max(a1, a2)
-    #     if ratio > closest:
-    #         closest = ratio
-    #         closestc = c
-    #
-    # # get bounding rect for the most rectangular contour
-    # x, y, w, h = cv2.boundingRect(closestc)
-    #
-    # # draw that rectangle on the display image
-    # out = frame
-    # #cv2.rectangle(out, (x,y),(x+w,y+h),(0,255,0),2)
+        # calculate rotation and translation matrices
+        _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
+        print(rvecs)
+        print(tvecs)
 
     # calculate fps
     frametimes.append(time.time() - last)
@@ -90,12 +100,11 @@ while rval:
     fps = int(60 / (sum(frametimes) / len(frametimes)))
 
     # show image/check for exit
-    cv2.imshow("Debug Display", frame)
+    cv2.imshow("Debug Display", v)
     key = cv2.waitKey(10)
     if key == 27:  # exit on ESC
-        #cv2.imwrite("board.png", frame)
         break
-    #record time for fps calculation
+    # record time for fps calculation
     last = time.time()
 
 cv2.destroyWindow("Debug Display")
