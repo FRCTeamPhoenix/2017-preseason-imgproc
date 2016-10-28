@@ -59,20 +59,38 @@ else:
 frametimes = list()
 last = time.time()
 
-frame = cv2.imread("board.png")
+img = cv2.imread("samples/board.png")
 
 while rval:
     # read the framez
     #rval, frame = cap.read()
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    objp = np.zeros((4, 3), np.float32)
-    objp[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
+    objp = np.zeros((6*7, 3), np.float32)
+    objp[:, :2] = np.mgrid[0:7, 0:6].T.reshape(-1, 2)
     axis = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, -1]]).reshape(-1, 3)
 
-    epsilon = 0.01 * cv2.arcLength(contours[0], True)
-    polyp = cv2.approxPolyDP(contours[0], epsilon, True)
-    imgp = polyp.astype(np.float32)
+    #epsilon = 0.01 * cv2.arcLength(contours[0], True)
+    #polyp = cv2.approxPolyDP(contours[0], epsilon, True)
+    #imgp = polyp.astype(np.float32)
+
+    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    ret, corners = cv2.findChessboardCorners(gray, (7,6),None)
+
+    if ret == True:
+        corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+
+        # Find the rotation and translation vectors.
+        _, rvecs, tvecs = cv2.solvePnP(objp, corners2, mtx, dist)
+
+        # project 3D points to image plane
+        imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
+
+        img = draw(img,corners2,imgpts)
+        cv2.imshow('img',img)
+        cv2.waitKey(10000);
+    sys.exit(0)
+
     #print()
     #print(imgp)
     #sys.exit(0)
@@ -85,7 +103,7 @@ while rval:
     imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
     img = draw(frame, corners2, imgpts)
     cv2.imshow('img', img)
-    k = cv2.waitKey(0) & 0xff
+    k = cv2.waitKey(10000) & 0xff
     if k == 's':
         cv2.destroyAllWindows()
 

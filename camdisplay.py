@@ -22,7 +22,7 @@ def config_linux(index):
     # v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
 
 # camera init
-index = 0
+index = 1
 cap = cv2.VideoCapture(index)
 
 
@@ -41,18 +41,24 @@ if cap.isOpened():
 
     # run some configuration if everything is good
     if rval:
+        print("Found camera");
         # set the resolution
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+        cap.set(cv2.CAP_PROP_EXPOSURE, 10)
         # run linux specific config using v4l2 driver if the platform is linux
         if platform.system() == "Linux":
             config_linux(index)
 else:
     rval = False
+    print("Did not find camera")
 
 # vars for calculating fps
 frametimes = list()
 last = time.time()
+
+#frame = cv2.imread("samples\sideways.png")
 
 # loop for as long as we're still getting images
 while rval:
@@ -70,28 +76,53 @@ while rval:
     kernel = np.ones((15, 15), np.uint8)
     v = cv2.morphologyEx(v, cv2.MORPH_OPEN, kernel)
 
+    #cv2.imshow("v", v)
+
     # get a list of continuous lines in the image
     _, contours, _ = cv2.findContours(v, 1, 2)
 
     # there's probably only a target if there are lines in the image
     if (len(contours) > 0):
-
+        #print("Found " + str(len(contours)) + " Contours")
         # generate object points array using fancy linear alg for the shape we're targeting
-        objp = np.zeros((4, 3), np.float32)
+        objp = np.zeros((4, 3), np.float64)
         objp[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
+
+        #print("objp: " + str(objp))
+
+        #sys.exit(0)
 
         # axis for drawing the debug representation
         axis = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, -1]]).reshape(-1, 3)
 
-        # fit a polygon to the contour
-        epsilon = 0.01 * cv2.arcLength(contours[0], True)
-        polyp = cv2.approxPolyDP(contours[0],epsilon,True)
-        imgp = polyp.astype(np.float32)
+        for contour in contours:
+            #print("Checking contour")
+            # fit a polygon to the contour
+            epsilon = 0.01 * cv2.arcLength(contour, True)
+            polyp = cv2.approxPolyDP(contour, epsilon, True)
+            imgp = polyp.astype(np.float32)
 
-        # calculate rotation and translation matrices
-        _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
-        print(rvecs)
-        print(tvecs)
+            #print("imgp: " + str(imgp))
+
+            if len(imgp) == len(objp):
+                #print("Found Relevant Countour")
+                #print(imgp)
+
+                # calculate rotation and translation matrices
+                _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
+                #print(rvecs)
+                #print(tvecs)
+
+                frame = cv2.line(frame, tuple(polyp[0].ravel()), tuple(polyp[1].ravel()), (255, 128, 0), 5);
+                frame = cv2.line(frame, tuple(polyp[1].ravel()), tuple(polyp[2].ravel()), (255, 128, 0), 5);
+                frame = cv2.line(frame, tuple(polyp[2].ravel()), tuple(polyp[3].ravel()), (255, 128, 0), 5);
+                frame = cv2.line(frame, tuple(polyp[3].ravel()), tuple(polyp[0].ravel()), (255, 128, 0), 5);
+                #cv2.fillPoly(np.zeros((10,10)), [imgp], 1)
+
+                # show image/check for exit
+                #imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
+                #frame = draw(frame, polyp, imgpts)
+                break
 
     # calculate fps
     frametimes.append(time.time() - last)
@@ -99,12 +130,12 @@ while rval:
         frametimes.pop(0)
     fps = int(60 / (sum(frametimes) / len(frametimes)))
 
-    # show image/check for exit
-    cv2.imshow("Debug Display", v)
-    key = cv2.waitKey(10)
+    cv2.imshow("Debug Display", frame)
+    key = cv2.waitKey(20)
     if key == 27:  # exit on ESC
         break
     # record time for fps calculation
     last = time.time()
+    #sys.exit(0)
 
 cv2.destroyWindow("Debug Display")
