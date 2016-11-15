@@ -15,17 +15,20 @@ def draw(img, corners, imgpts):
 
 def config_linux(index):
     import v4l2ctl
-    v4l2ctl.restore_defaults(index)
-    # v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
-    # v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
-    # v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
-    # v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
+    #v4l2ctl.restore_defaults(index)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO_PRIORITY, 0)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
+    v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
+    v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
 
 # camera init
 index = 1
 cap = cv2.VideoCapture(index)
 
-
+# set the resolution
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 # experimentally determined camera (intrinsic) and distortion matrices, converted to numpy arrays
 mtx = [[ 771.82954339,    0,          640.18100339],
@@ -41,12 +44,7 @@ if cap.isOpened():
 
     # run some configuration if everything is good
     if rval:
-        print("Found camera");
-        # set the resolution
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        #cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
-        cap.set(cv2.CAP_PROP_EXPOSURE, 0.01)
+        print("Found camera")
         # run linux specific config using v4l2 driver if the platform is linux
         if platform.system() == "Linux":
             config_linux(index)

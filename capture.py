@@ -8,15 +8,6 @@ import sys
 index = 1
 cap = cv2.VideoCapture(index)
 
-# only run linux specific code on linux
-if platform.system() == "Linux":
-    import v4l2ctl
-    v4l2ctl.restore_defaults(index)
-    #v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
-    #v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
-    v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
-    v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
-
 # set the resolution
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -26,6 +17,16 @@ if cap.isOpened():
 else:
     rval = False
 
+# only run linux specific code on linux
+if platform.system() == "Linux":
+    import v4l2ctl
+    v4l2ctl.restore_defaults(index)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO, 1)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_AUTO_PRIORITY, 0)
+    v4l2ctl.set(index, v4l2ctl.PROP_EXPOSURE_ABS, 10)
+    v4l2ctl.set(index, v4l2ctl.PROP_WHITE_BALANCE_TEMP_AUTO, 0)
+    v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
+
 while rval:
     # read the frame
     rval, frame = cap.read()
@@ -34,7 +35,7 @@ while rval:
     cv2.imshow("Debug Display", frame)
     key = cv2.waitKey(10)
     if key == 27:  # exit on ESC
-        cv2.imwrite("board.png", frame)
+        cv2.imwrite("b.png", frame)
         break
     #record time for fps calculation
     last = time.time()

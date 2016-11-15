@@ -13,6 +13,7 @@ PROP_SHARPNESS = "sharpness"
 PROP_BACKLIGHT_COMPENSATION = "backlight_compensation"
 PROP_EXPOSURE_AUTO = "exposure_auto"
 PROP_EXPOSURE_ABS = "exposure_absolute"
+PROP_EXPOSURE_AUTO_PRIORITY = "exposure_auto_priority"
 PROP_FOCUS_AUTO = "focus_auto"
 PROP_FOCUS_ABSOLUTE = "focus_absolute"
 
