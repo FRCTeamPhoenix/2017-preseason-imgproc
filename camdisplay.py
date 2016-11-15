@@ -45,8 +45,8 @@ if cap.isOpened():
         # set the resolution
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
-        cap.set(cv2.CAP_PROP_EXPOSURE, 10)
+        #cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+        cap.set(cv2.CAP_PROP_EXPOSURE, 0.01)
         # run linux specific config using v4l2 driver if the platform is linux
         if platform.system() == "Linux":
             config_linux(index)
@@ -64,19 +64,30 @@ last = time.time()
 while rval:
     # read the frame
     rval, frame = cap.read()
+    cv2.imshow("frame", frame);
 
     # convert to hsv colorspace
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     # split up the channels
     h, s, v = cv2.split(hsv)
+
+    ##_, s = cv2.threshold(s, 1, 50, cv2.THRESH_BINARY)
+
     # threshold the value channel
     _, v = cv2.threshold(v, 100, 255, cv2.THRESH_BINARY)
+
+    # threshold the hue channel (for green LED)
+    #_, h = cv2.threshold(h, 10, 190, cv2.THRESH_BINARY)
+
+    #combine the thresholded channels
+    #v = cv2.bitwise_and(v, h);
+
 
     # erode, then dilate to remove noise
     kernel = np.ones((15, 15), np.uint8)
     v = cv2.morphologyEx(v, cv2.MORPH_OPEN, kernel)
+    #cv2.imshow("thresholded", v)
 
-    #cv2.imshow("v", v)
 
     # get a list of continuous lines in the image
     _, contours, _ = cv2.findContours(v, 1, 2)
@@ -130,7 +141,7 @@ while rval:
         frametimes.pop(0)
     fps = int(60 / (sum(frametimes) / len(frametimes)))
 
-    cv2.imshow("Debug Display", frame)
+    #cv2.imshow("Debug Display", frame)
     key = cv2.waitKey(20)
     if key == 27:  # exit on ESC
         break
