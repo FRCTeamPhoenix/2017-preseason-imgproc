@@ -13,6 +13,15 @@ def draw(img, corners, imgpts):
     img = cv2.line(img, corner, tuple(imgpts[2].ravel()), (0,0,255), 5)
     return img
 
+def draw_poly(img, polyp):
+    l = len(polyp)
+    for i in range(0, l):
+        if i + 1 == l:
+            img = cv2.line(img, tuple(polyp[i].ravel()), tuple(polyp[0].ravel()), (255, 128, 0), 5);
+        else:
+            img = cv2.line(img, tuple(polyp[i].ravel()), tuple(polyp[i + 1].ravel()), (255, 128, 0), 5);
+
+
 def config_linux(index):
     import v4l2ctl
     #v4l2ctl.restore_defaults(index)
@@ -23,12 +32,12 @@ def config_linux(index):
     v4l2ctl.set(index, v4l2ctl.PROP_FOCUS_AUTO, 0)
 
 # camera init
-index = 1
-cap = cv2.VideoCapture(index)
+index = 0
+cap = cv2.VideoCapture("output.avi")
 
 # set the resolution
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+#cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+#cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 # experimentally determined camera (intrinsic) and distortion matrices, converted to numpy arrays
 mtx = [[ 771.82954339,    0,          640.18100339],
@@ -47,7 +56,8 @@ if cap.isOpened():
         print("Found camera")
         # run linux specific config using v4l2 driver if the platform is linux
         if platform.system() == "Linux":
-            config_linux(index)
+            pass
+            #config_linux(index)
 else:
     rval = False
     print("Did not find camera")
@@ -56,92 +66,81 @@ else:
 frametimes = list()
 last = time.time()
 
-#frame = cv2.imread("samples\sideways.png")
 
 # loop for as long as we're still getting images
 while rval:
     # read the frame
     rval, frame = cap.read()
-    cv2.imshow("frame", frame);
 
     # convert to hsv colorspace
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    # split up the channels
-    h, s, v = cv2.split(hsv)
 
-    ##_, s = cv2.threshold(s, 1, 50, cv2.THRESH_BINARY)
-
-    # threshold the value channel
-    _, v = cv2.threshold(v, 100, 255, cv2.THRESH_BINARY)
-
-    # threshold the hue channel (for green LED)
-    #_, h = cv2.threshold(h, 10, 190, cv2.THRESH_BINARY)
-
-    #combine the thresholded channels
-    #v = cv2.bitwise_and(v, h);
-
+    lower_green = np.array([70, 50, 50])
+    upper_green = np.array([80, 255, 255])
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    res = cv2.bitwise_and(frame, frame, mask=mask)
 
     # erode, then dilate to remove noise
-    kernel = np.ones((15, 15), np.uint8)
-    v = cv2.morphologyEx(v, cv2.MORPH_OPEN, kernel)
-    #cv2.imshow("thresholded", v)
-
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
     # get a list of continuous lines in the image
-    _, contours, _ = cv2.findContours(v, 1, 2)
+    _, contours, _ = cv2.findContours(mask, 1, 2)
 
     # there's probably only a target if there are lines in the image
     if (len(contours) > 0):
-        #print("Found " + str(len(contours)) + " Contours")
-        # generate object points array using fancy linear alg for the shape we're targeting
+
+        # generate object points array
         objp = np.zeros((4, 3), np.float64)
         objp[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
-
-        #print("objp: " + str(objp))
-
-        #sys.exit(0)
 
         # axis for drawing the debug representation
         axis = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, -1]]).reshape(-1, 3)
 
-        for contour in contours:
-            #print("Checking contour")
-            # fit a polygon to the contour
-            epsilon = 0.01 * cv2.arcLength(contour, True)
-            polyp = cv2.approxPolyDP(contour, epsilon, True)
-            imgp = polyp.astype(np.float32)
+        polygons = []
+        for c in contours:
+            epsilon = 0.1 * cv2.arcLength(c, True)
+            polygon = cv2.approxPolyDP((c, epsilon, True))
+            polygons.append((polygon, cv2.contourArea(polygon)))
+        polygons = sorted(polygons, key=lambda contour: contour[1])
 
-            #print("imgp: " + str(imgp))
+        outer_poly = None
+        inner_poly = None
+        for p, a in reversed(polygons):
+            if len(p) == len(objp) / 2:
+                if outer_poly is not None:
+                    outer_poly = p
+                else:
+                    inner_poly = p
 
-            if len(imgp) == len(objp):
-                #print("Found Relevant Countour")
-                #print(imgp)
+        polyp =
+        imgp = polyp.astype(np.float32)
 
-                # calculate rotation and translation matrices
-                _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
-                #print(rvecs)
-                #print(tvecs)
+        if len(imgp) == len(objp):
 
-                frame = cv2.line(frame, tuple(polyp[0].ravel()), tuple(polyp[1].ravel()), (255, 128, 0), 5);
-                frame = cv2.line(frame, tuple(polyp[1].ravel()), tuple(polyp[2].ravel()), (255, 128, 0), 5);
-                frame = cv2.line(frame, tuple(polyp[2].ravel()), tuple(polyp[3].ravel()), (255, 128, 0), 5);
-                frame = cv2.line(frame, tuple(polyp[3].ravel()), tuple(polyp[0].ravel()), (255, 128, 0), 5);
-                #cv2.fillPoly(np.zeros((10,10)), [imgp], 1)
+            # calculate rotation and translation matrices
+            _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
 
-                # show image/check for exit
-                #imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
-                #frame = draw(frame, polyp, imgpts)
-                break
+            draw_poly(frame, polyp)
+
+            # show image/check for exit
+            #imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
+            #frame = draw(frame, polyp, imgpts)
 
     # calculate fps
     frametimes.append(time.time() - last)
     if len(frametimes) > 60:
         frametimes.pop(0)
-    fps = int(60 / (sum(frametimes) / len(frametimes)))
+    fps = int(1 / (sum(frametimes) / len(frametimes)))
 
-    #cv2.imshow("Debug Display", frame)
+    cv2.putText(frame, str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv2.LINE_AA)
+
+    cv2.imshow("Debug Display", frame)
     key = cv2.waitKey(20)
     if key == 27:  # exit on ESC
+        print(contours)
         break
     # record time for fps calculation
     last = time.time()
