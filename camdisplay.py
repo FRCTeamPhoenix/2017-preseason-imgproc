@@ -1,3 +1,9 @@
+# TO DO
+#   - Fix objpoints
+#   - Create imgpoints array
+#   - Learn more about GPU optimization
+
+
 import cv2
 import time
 import numpy as np
@@ -93,8 +99,17 @@ while rval:
     if (len(contours) > 0):
 
         # generate object points array
-        objp = np.zeros((4, 3), np.float64)
-        objp[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
+        #objp_outer = np.zeros((4, 3), np.float64)
+        #objp_outer[:, :2] = np.mgrid[0:2, 0:2].T.reshape(-1, 2)
+        objp = np.array([[0 ,0 ,0],
+                         [1, 0, 0],
+                         [0, 1, 0],
+                         [1, 1, 0],
+                         [1/12, 1/12, 0],
+                         [11/12, 1/12, 0],
+                         [1/12, 11/12, 0],
+                         [11/12, 11/12, 0]])
+        #objp = np.append(objp_outer, objp_inner)
 
         # axis for drawing the debug representation
         axis = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, -1]]).reshape(-1, 3)
@@ -102,28 +117,31 @@ while rval:
         polygons = []
         for c in contours:
             epsilon = 0.1 * cv2.arcLength(c, True)
-            polygon = cv2.approxPolyDP((c, epsilon, True))
+            polygon = cv2.approxPolyDP(c, epsilon, True)
             polygons.append((polygon, cv2.contourArea(polygon)))
         polygons = sorted(polygons, key=lambda contour: contour[1])
 
+        #print(objp)
         outer_poly = None
         inner_poly = None
         for p, a in reversed(polygons):
             if len(p) == len(objp) / 2:
-                if outer_poly is not None:
+                if outer_poly is None:
                     outer_poly = p
                 else:
                     inner_poly = p
+                    break
 
-        polyp =
-        imgp = polyp.astype(np.float32)
 
-        if len(imgp) == len(objp):
+        if outer_poly is not None and inner_poly is not None:
+            polyp = np.concatenate((outer_poly, inner_poly))
+            imgp = polyp.astype(np.float32)
 
             # calculate rotation and translation matrices
             _, rvecs, tvecs = cv2.solvePnP(objp, imgp, mtx, dist)
 
-            draw_poly(frame, polyp)
+            draw_poly(frame, outer_poly)
+            draw_poly(frame, inner_poly)
 
             # show image/check for exit
             #imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
@@ -140,7 +158,6 @@ while rval:
     cv2.imshow("Debug Display", frame)
     key = cv2.waitKey(20)
     if key == 27:  # exit on ESC
-        print(contours)
         break
     # record time for fps calculation
     last = time.time()
